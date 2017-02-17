@@ -15,7 +15,8 @@ ESP8266WebServer server(80);
 DHT dht(DHTPIN, DHTTYPE);
 
 String CurrentState = "Laag";
-String CurrentHostName = "Badkamer";
+String CurrentHostName =
+"Badkamer";
 boolean CurrentInAutomaticMode = false;
 boolean TimerIsActive = false;
 float CurrentTemperature = 0;
@@ -27,7 +28,7 @@ int itho_counter =0;
 void setup() {
   dht.begin(); 
   rf.init();
-  
+
   ConnectToWifi();
   
   server.on("/", handlePage);
@@ -39,6 +40,10 @@ void setup() {
   rf.initReceive();
      
   server.begin(); 
+
+  UpdatePilightLabel("Handmatig",111);
+  UpdatePilightLabel(CurrentState,112);
+  
 }
 
 void loop() {
@@ -52,6 +57,7 @@ void loop() {
   if (millis() - dht_lastInterval > 20000)
   {
     readTemperatureAndHumidity();
+    UpdatePilightTempHum();
     dht_lastInterval = millis();
 
     if (CurrentHumidity > 50 && !CurrentInAutomaticMode)
@@ -62,6 +68,7 @@ void loop() {
           {
           handle_highSpeed();
           CurrentInAutomaticMode = true;
+          UpdatePilightLabel("Automatisch",111);
           TimerIsActive = false;
           itho_counter = 0;
           }
@@ -74,6 +81,7 @@ void loop() {
           {
             handle_lowSpeed();
             CurrentInAutomaticMode = false;
+            UpdatePilightLabel("Handmatig",111);
             TimerIsActive = false;
             itho_counter = 0;
           }
@@ -108,7 +116,7 @@ void updateCurrentMode()
   //66-6a-66-69-a5-69-9a-56 badkamer
   IthoPacket packet;
   packet = rf.getLastPacket();
-  String remoteId = rf.getLastIDstr().substring(0,2); 
+  String remoteId = rf.getLastIDstr(); 
   String remoteName;
 
   if (remoteId == "65-9a-66-95-a5-a9-9a-56")
@@ -119,29 +127,30 @@ void updateCurrentMode()
   {
     remoteName = "(Badkamer)";
   }
-  
   if (remoteId == "65-9a-66-95-a5-a9-9a-56" || remoteId == "66-6a-66-69-a5-69-9a-56")
   {
     switch (packet.command) { 
     case IthoUnknown: 
       break; 
     case IthoLow: 
-      CurrentState = "Laag " + remoteName;
-      CurrentInAutomaticMode = false;   
+      CurrentState = "Laag:" + remoteName;
+      TimerIsActive = false;
+      UpdatePilightLabel(CurrentState,112);  
       break; 
     case IthoMedium: 
-      CurrentState = "Medium " + remoteName; 
+      CurrentState = "Medium:" + remoteName;
+      UpdatePilightLabel(CurrentState,112); 
       activateTimer();
-      CurrentInAutomaticMode = false;
       break; 
     case IthoFull: 
-      CurrentState = "Hoog " + remoteName; 
+      CurrentState = "Hoog:" + remoteName;
+      UpdatePilightLabel(CurrentState,112); 
       activateTimer();
-      CurrentInAutomaticMode = false;
       break; 
     case IthoTimer1: 
-      CurrentState = "Timer 10 minuten " + remoteName;
-      CurrentInAutomaticMode = false; 
+      CurrentState = "Timer 10 minuten:" + remoteName;
+      TimerIsActive = false;
+      UpdatePilightLabel(CurrentState,112);
       break; 
     }
   }
@@ -149,7 +158,8 @@ void updateCurrentMode()
 
 void handle_lowSpeed() { 
   CurrentState="laag";
-  CurrentInAutomaticMode = false;
+  TimerIsActive = false;
+  UpdatePilightLabel(CurrentState,112);
   sendLowSpeed();
   handlePage();
   rf.initReceive(); 
@@ -157,7 +167,7 @@ void handle_lowSpeed() {
 
 void handle_mediumSpeed() { 
   CurrentState="Medium";
-  CurrentInAutomaticMode = false;
+  UpdatePilightLabel(CurrentState,112);
   activateTimer();
   sendMediumSpeed();
   handlePage();
@@ -166,7 +176,7 @@ void handle_mediumSpeed() {
 
 void handle_highSpeed() { 
   CurrentState="Hoog";
-  CurrentInAutomaticMode = false;
+  UpdatePilightLabel(CurrentState,112);
   activateTimer();
   sendFullSpeed();
   handlePage();
@@ -175,7 +185,8 @@ void handle_highSpeed() {
 
 void handle_timer() { 
   CurrentState="Timer 10 minuten";
-  CurrentInAutomaticMode = false;
+  TimerIsActive = false;
+  UpdatePilightLabel(CurrentState,112);
   sendTimer();
   handlePage();
   rf.initReceive(); 
@@ -283,3 +294,40 @@ void sendFullSpeed() {
 void sendTimer() {
    rf.sendCommand(IthoTimer1);
 }
+
+void UpdatePilight(String url)
+  {    
+    const char* host = "192.168.1.108";
+    // Use WiFiClient class to create TCP connections
+    WiFiClient client;
+    const int httpPort = 5001;
+    
+    if (client.connect(host, httpPort)) {
+      // This will send the request to the server
+      client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                 "Host: " + host + "\r\n" + 
+                 "Connection: close\r\n\r\n");
+            
+    }
+  }
+
+  void UpdatePilightTempHum()
+  {
+    String s = "/send?protocol=generic_weather&temperature=";
+    s += CurrentTemperature;
+    s += "&humidity=";
+    s += CurrentHumidity;
+    s += "&id=110";
+    UpdatePilight(s);
+  }
+
+  void UpdatePilightLabel(String LabelTekst, int id)
+  {
+    String l = "/send?protocol=generic_label&label=";
+    l += LabelTekst;
+    l += "&color=black&id=";
+    l += id;
+    UpdatePilight(l);
+  }
+  
+
