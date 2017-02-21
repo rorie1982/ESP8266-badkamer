@@ -239,8 +239,8 @@ void readTemperatureAndHumidity()
 
 void ConnectToWifi()
 {
-  char ssid[] = "Rorie";
-  char pass[] = "BIAW7W9H7Y8D";
+  char ssid[] = "";
+  char pass[] = "";
   int i = 0;
   
   WiFi.hostname(CurrentHostName);
