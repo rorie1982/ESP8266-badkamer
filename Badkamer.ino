@@ -17,11 +17,13 @@ DHT dht(DHTPIN, DHTTYPE);
 
 String currentState = "Laag";
 String currentHostName = "ESP-Badkamer-01";
-String currentVersion = "1.0.1";
-boolean CurrentInAutomaticMode = false;
+String currentVersion = "1.0.3";
+String currentIpAdres = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
+String pilightIpAdres = "192.168.1.108";
+boolean currentInAutomaticMode = false;
 boolean TimerIsActive = false;
-float CurrentTemperature = 0;
-float CurrentHumidity = 0;
+float currentTemperature = 0;
+float currentHumidity = 0;
 float firstMeasurementMoment = 0;
 float secondMeasurementMoment = 0;
 float delta =0;
@@ -32,28 +34,42 @@ long dht_lastInterval  = 0;
 int itho_counter =0;
 
 void setup() {
-  Serial.begin(115200);
-  
+  //Serial.begin(115200);
+
+  //Initialization dht22 temperature and humidity sensor.
   dht.begin(); 
+
+  //First read temperature and humidity.
   readTemperatureAndHumidity();
-  firstMeasurementMoment = CurrentHumidity;
-  secondMeasurementMoment = CurrentHumidity;
-  
+
+  //Initialization of first and second measure moment, to avoid deviding by zero.
+  firstMeasurementMoment = currentHumidity;
+  secondMeasurementMoment = currentHumidity;
+
+  //Initialization of CC1101 module.
   rf.init();
 
+  //Join command send, this is only needed once.
+  //sendRegister();  
+
+  //Connect to the WIFI network
   ConnectToWifi();
-  
+
+  //Set end points of the webserver
   server.on("/", handlePage);
   server.on("/xml",handle_xml);
   server.on("/action",handle_buttonPressed);
 
+  //Set the CC1101 module in receive mode for the first time, this needs to be done everytime the send data was called.
   rf.initReceive();
 
-  handlePage();   
+  //Start webserver  
   server.begin(); 
 
+  //Synq with external system pilight.
+  sendLowSpeed();
   UpdatePilightLabel("Handmatig",111);
-  UpdatePilightLabel(currentState,112);
+  UpdatePilightLabel("Laag",112);
   
 }
 
@@ -69,46 +85,35 @@ void loop() {
   //elke 30 seconde
   if (millis() - dht_lastInterval > 30000)
   {
-    Serial.println("30 seconden voorbij");
     readTemperatureAndHumidity();
-    UpdatePiligtTemperatureAndHumidity(CurrentTemperature,CurrentHumidity,110);
+    UpdatePiligtTemperatureAndHumidity(currentTemperature,currentHumidity,110);
     dht_lastInterval = millis();
 
-    delta = CurrentHumidity - min(firstMeasurementMoment, secondMeasurementMoment);
-    Serial.println("First en second measurement values delta is calculated with: ");
-    Serial.print(firstMeasurementMoment);
-    Serial.print(secondMeasurementMoment);
-    Serial.println("Delta: ");
-    Serial.print(delta);
+    delta = currentHumidity - min(firstMeasurementMoment, secondMeasurementMoment);
     
     storedTargetHumidity = min(secondMeasurementMoment, firstMeasurementMoment) + 2;
-    Serial.println("storedTargetHumidity: ");
-    Serial.print(storedTargetHumidity);
     
     secondMeasurementMoment = firstMeasurementMoment; 
-    firstMeasurementMoment = CurrentHumidity;
+    firstMeasurementMoment = currentHumidity;
 
-    if (!CurrentInAutomaticMode && delta > 3)
+    if (!currentInAutomaticMode && delta > 3)
     {
-       Serial.println("Delta > 3");
        handle_highSpeed();
-       CurrentInAutomaticMode = true;
+       currentInAutomaticMode = true;
        UpdatePilightLabel("Automatisch",111);
        targetHumidity = storedTargetHumidity;
-       Serial.println("Target humidity set to: ");
-       Serial.print(targetHumidity);
     }
-    else if (CurrentInAutomaticMode && CurrentHumidity <= targetHumidity)
+    else if (currentInAutomaticMode && currentHumidity <= targetHumidity)
     {
        handle_lowSpeed();
-       CurrentInAutomaticMode = false;
+       currentInAutomaticMode = false;
        UpdatePilightLabel("Automatisch",111);
-       Serial.println("CurrentHumidity <= targetHumidity: ");
+       targetHumidity = 0;
     } 
-     Serial.print("No action required");
   }
 
-  if (TimerIsActive && !CurrentInAutomaticMode)
+  //If the timer is active and the system is not in automatic mode
+  if (TimerIsActive && !currentInAutomaticMode)
   {
       //If timer is set to active and CurrentInAutomaticMode is false then check if 10 minutes are over
       if (millis() - timer_lastInterval > 600000)
@@ -168,11 +173,10 @@ void updateCurrentMode()
 }
 
 void handle_lowSpeed() { 
-  currentState="laag";
+  currentState="Laag";
   TimerIsActive = false;
   UpdatePilightLabel(currentState,112);
   sendLowSpeed();
-  handlePage();
   rf.initReceive(); 
 }
 
@@ -181,7 +185,6 @@ void handle_mediumSpeed() {
   UpdatePilightLabel(currentState,112);
   activateTimer();
   sendMediumSpeed();
-  handlePage();
   rf.initReceive(); 
 }
 
@@ -190,7 +193,6 @@ void handle_highSpeed() {
   UpdatePilightLabel(currentState,112);
   activateTimer();
   sendFullSpeed();
-  handlePage();
   rf.initReceive();
 }
 
@@ -199,20 +201,19 @@ void handle_timer() {
   TimerIsActive = false;
   UpdatePilightLabel(currentState,112);
   sendTimer();
-  handlePage();
   rf.initReceive(); 
 }
 
 void handlePage()
 {
   String webPage;
-  String currentIpAdres = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
 
   webPage += "<!DOCTYPE html>";
   webPage += "<html lang=\"en\">";
   webPage += "<head>";
   webPage += "<title>Badkamer</title>";
   webPage += "<meta charset=\"utf-8\">";
+  webPage += "<meta name=\"apple-mobile-web-app-capable\" content=\"yes\">";
   webPage += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
   webPage += "<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\">";
   webPage += GenerateFavIcon();
@@ -223,12 +224,11 @@ void handlePage()
   webPage += "<body>";
   webPage += "<div class=\"container\">";
   webPage += "<h2>Badkamer</h2>";
-  webPage += "<div class=\"panel-group\">";
   webPage += "<div id=\"BPanelVentilation\" class=\"panel panel-default\">";
   webPage += "<div class=\"panel-heading\">Ventilatie</div>";
   webPage += "<div class=\"panel-body\">";
   webPage += "<span class=\"glyphicon glyphicon-menu-hamburger\"></span>&nbsp;";
-  webPage += "Itho ecofan bediening:<span class='pull-right'>"; 
+  webPage += "Ventilatie:<span class='pull-right'>"; 
   webPage += "<button type='button' class='btn btn-default' id='btnLow' onclick='ButtonPressed(this.id)'><span>Laag</span></button>&nbsp;"; 
   webPage += "<button type='button' class='btn btn-default' id='btnMedium' onclick='ButtonPressed(this.id)'><span>Medium</span></button>&nbsp;";
   webPage += "<button type='button' class='btn btn-default' id='btnFast' onclick='ButtonPressed(this.id)'><span>Hoog</span></button>&nbsp; ";
@@ -257,6 +257,17 @@ void handlePage()
   webPage += "<span class='glyphicon glyphicon-tint'></span>&nbsp;";
   webPage += "Luchtvogtigheid: <span class='pull-right' id='BHum01'></span>"; 
   webPage += "</div>"; 
+
+  webPage += "<div class=\"panel-body\">";
+  webPage += "<span class='glyphicon glyphicon-tint'></span>&nbsp;";
+  webPage += "Delta: <span class='pull-right' id='delta'></span>"; 
+  webPage += "</div>"; 
+
+  webPage += "<div class=\"panel-body\">";
+  webPage += "<span class='glyphicon glyphicon-tint'></span>&nbsp;";
+  webPage += "Target: <span class='pull-right' id='target'></span>"; 
+  webPage += "</div>"; 
+  
   webPage += "</div>"; 
   webPage += "<div class=\"panel panel-default\">";
   webPage += "<div class=\"panel-heading\">Algemeen</div>"; 
@@ -274,7 +285,6 @@ void handlePage()
   webPage += "</div>"; 
   webPage += "</div>"; 
   webPage += "</div>";
-  webPage += "</div>";
   webPage += "</body>";
   webPage += "</html>";
 
@@ -283,26 +293,28 @@ void handlePage()
 
 String GenerateFavIcon()
 {
-  String ExternalDataSourceIpAdres = "192.168.1.108";
+  //Generate Favicon for Web, Android, Microsoft, and iOS (iPhone and iPad) Apps.
+  //Actual png files that are used are stored on a external apache webserver.
+  
   String returnValue;
   
   returnValue += "<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css\">";
-  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"57x57\" href=\"http://" + ExternalDataSourceIpAdres + "/apple-icon-57x57.png\">";
-  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"60x60\" href=\"http://" + ExternalDataSourceIpAdres + "/apple-icon-60x60.png\">";
-  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"72x72\" href=\"http://" + ExternalDataSourceIpAdres + "/apple-icon-72x72.png\">";
-  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"76x76\" href=\"http://" + ExternalDataSourceIpAdres + "/apple-icon-76x76.png\">";
-  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"114x114\" href=\"http://" + ExternalDataSourceIpAdres + "/apple-icon-114x114.png\">";
-  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"120x120\" href=\"http://" + ExternalDataSourceIpAdres + "/apple-icon-120x120.png\">";
-  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"144x144\" href=\"http://" + ExternalDataSourceIpAdres + "/apple-icon-144x144.png\">";
-  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"152x152\" href=\"http://" + ExternalDataSourceIpAdres + "/apple-icon-152x152.png\">";
-  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"http://" + ExternalDataSourceIpAdres + "/apple-icon-180x180.png\">";
-  returnValue += "<link rel=\"icon\" type=\"image/png\" sizes=\"192x192\"  href=\"http://" + ExternalDataSourceIpAdres + "/android-icon-192x192.png\">";
-  returnValue += "<link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"http://" + ExternalDataSourceIpAdres + "/favicon-32x32.png\">";
-  returnValue += "<link rel=\"icon\" type=\"image/png\" sizes=\"96x96\" href=\"http://" + ExternalDataSourceIpAdres + "/favicon-96x96.png\">";
-  returnValue += "<link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"http://" + ExternalDataSourceIpAdres + "/favicon-16x16.png\">";
-  returnValue += "<link rel=\"manifest\" href=\"http://" + ExternalDataSourceIpAdres + "/manifest.json\">";
+  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"57x57\" href=\"http://" + pilightIpAdres + "/apple-icon-57x57.png\">";
+  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"60x60\" href=\"http://" + pilightIpAdres + "/apple-icon-60x60.png\">";
+  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"72x72\" href=\"http://" + pilightIpAdres + "/apple-icon-72x72.png\">";
+  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"76x76\" href=\"http://" + pilightIpAdres + "/apple-icon-76x76.png\">";
+  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"114x114\" href=\"http://" + pilightIpAdres + "/apple-icon-114x114.png\">";
+  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"120x120\" href=\"http://" + pilightIpAdres + "/apple-icon-120x120.png\">";
+  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"144x144\" href=\"http://" + pilightIpAdres + "/apple-icon-144x144.png\">";
+  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"152x152\" href=\"http://" + pilightIpAdres + "/apple-icon-152x152.png\">";
+  returnValue += "<link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"http://" + pilightIpAdres + "/apple-icon-180x180.png\">";
+  returnValue += "<link rel=\"icon\" type=\"image/png\" sizes=\"192x192\"  href=\"http://" + pilightIpAdres + "/android-icon-192x192.png\">";
+  returnValue += "<link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"http://" + pilightIpAdres + "/favicon-32x32.png\">";
+  returnValue += "<link rel=\"icon\" type=\"image/png\" sizes=\"96x96\" href=\"http://" + pilightIpAdres + "/favicon-96x96.png\">";
+  returnValue += "<link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"http://" + pilightIpAdres + "/favicon-16x16.png\">";
+  returnValue += "<link rel=\"manifest\" href=\"http://" + pilightIpAdres + "/manifest.json\">";
   returnValue += "<meta name=\"msapplication-TileColor\" content=\"#ffffff\">";
-  returnValue += "<meta name=\"msapplication-TileImage\" content=\"http://" + ExternalDataSourceIpAdres + "/ms-icon-144x144.png\">";
+  returnValue += "<meta name=\"msapplication-TileImage\" content=\"http://" + pilightIpAdres + "/ms-icon-144x144.png\">";
   returnValue += "<meta name=\"theme-color\" content=\"#ffffff\">";
   
   return returnValue;
@@ -314,7 +326,7 @@ void handle_xml()
   String currentModes;
   String automaticTimer;
   
-  if(CurrentInAutomaticMode)
+  if(currentInAutomaticMode)
   {
       currentModes = "Automatisch";
   }
@@ -337,11 +349,11 @@ void handle_xml()
   returnValue += "<sensors>";
   returnValue += "<sensor>";
   returnValue += "<id>BTemp01</id>";
-  returnValue += "<value>" + String(CurrentTemperature) + " °C</value>";
+  returnValue += "<value>" + String(currentTemperature) + " °C</value>";
   returnValue += "</sensor>";
   returnValue += "<sensor>";
   returnValue += "<id>BHum01</id>";
-  returnValue += "<value>" + String(CurrentHumidity) + " %</value>";
+  returnValue += "<value>" + String(currentHumidity) + " %</value>";
   returnValue += "</sensor>";
   returnValue += "</sensors>";
   returnValue += "<devices>";
@@ -357,6 +369,14 @@ void handle_xml()
   returnValue += "<id>BTimer01</id>";
   returnValue += "<value>" + automaticTimer + "</value>";
   returnValue += "</device>";
+  returnValue += "<device>";
+  returnValue += "<id>target</id>";
+  returnValue += "<value>" + String(targetHumidity) + "</value>";
+  returnValue += "</device>";
+   returnValue += "<device>";
+  returnValue += "<id>delta</id>";
+  returnValue += "<value>" + String(delta) + "</value>";
+  returnValue += "</device>";
   returnValue += "</devices>";
   returnValue += "</Badkamer>";
   
@@ -370,7 +390,7 @@ String GenerateJavaScript()
   returnValue += "function LoadData(){";
   returnValue += "$.ajax({";
   returnValue += "type: \"GET\",";
-  returnValue += "url: \"http://192.168.1.109/xml\",";
+  returnValue += "url: \"http://" + currentIpAdres + "/xml\",";
   returnValue += "cache: false,";
   returnValue += "dataType: \"xml\",";
   returnValue += "success: DisplayData";
@@ -378,7 +398,7 @@ String GenerateJavaScript()
   returnValue += "}";
   
   returnValue += "function ButtonPressed(id){";
-  returnValue += "$.post('http://192.168.1.109/action?id=' + id);";
+  returnValue += "$.post('http://" + currentIpAdres + "/action?id=' + id);";
   returnValue += "LoadData();";
   returnValue += "}";
   
@@ -398,13 +418,13 @@ String GenerateJavaScript()
 
   returnValue += "function UpdatePanels(){";
   returnValue += "var statusVentilatie = $('#BStand01').html();";
-  returnValue += "if (statusVentilatie == \"Ingeschakelt\")";
+  returnValue += "if(statusVentilatie.includes(\"Laag\"))";
   returnValue += "{";
-  returnValue += "$('#BPanelVentilation').removeClass('panel panel-default').addClass('panel panel-success');";
+  returnValue += "$('#BPanelVentilation').removeClass('panel panel-success').addClass('panel panel-default');";;
   returnValue += "}";
   returnValue += "else";
   returnValue += "{";
-  returnValue += "$('#BPanelVentilation').removeClass('panel panel-success').addClass('panel panel-default');";
+  returnValue += "$('#BPanelVentilation').removeClass('panel panel-default').addClass('panel panel-success');";
   returnValue += "}";
   returnValue += "}";
   
@@ -443,10 +463,10 @@ void readTemperatureAndHumidity()
 {
   // Reading temperature for humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor)
-  CurrentHumidity = dht.readHumidity();          // Read humidity (percent)
-  CurrentTemperature = dht.readTemperature();     // Read temperature as Fahrenheit
+  currentHumidity = dht.readHumidity();          // Read humidity (percent)
+  currentTemperature = dht.readTemperature();     // Read temperature as Fahrenheit
   // Check if any reads failed and exit early (to try again).
-  if (isnan(CurrentHumidity) || isnan(CurrentTemperature)) 
+  if (isnan(currentHumidity) || isnan(currentTemperature)) 
   {
     return;
   }
@@ -479,7 +499,7 @@ void ConnectToWifi()
 
 void activateTimer()
 {
-  if(!CurrentInAutomaticMode)
+  if(!currentInAutomaticMode)
   {
     TimerIsActive = true;
     timer_lastInterval = millis();
