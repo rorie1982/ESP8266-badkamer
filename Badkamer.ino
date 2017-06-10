@@ -17,7 +17,7 @@ DHT dht(DHTPIN, DHTTYPE);
 
 String currentState = "Laag";
 String currentHostName = "ESP-Badkamer-01";
-String currentVersion = "1.0.3";
+String currentVersion = "1.0.5";
 String currentIpAdres = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
 String pilightIpAdres = "192.168.1.108";
 boolean currentInAutomaticMode = false;
@@ -34,7 +34,6 @@ long dht_lastInterval  = 0;
 int itho_counter =0;
 
 void setup() {
-  //Serial.begin(115200);
 
   //Initialization dht22 temperature and humidity sensor.
   dht.begin(); 
@@ -91,7 +90,7 @@ void loop() {
 
     delta = currentHumidity - min(firstMeasurementMoment, secondMeasurementMoment);
     
-    storedTargetHumidity = min(secondMeasurementMoment, firstMeasurementMoment) + 2;
+    storedTargetHumidity = min(secondMeasurementMoment, firstMeasurementMoment) + 3;
     
     secondMeasurementMoment = firstMeasurementMoment; 
     firstMeasurementMoment = currentHumidity;
@@ -107,7 +106,7 @@ void loop() {
     {
        handle_lowSpeed();
        currentInAutomaticMode = false;
-       UpdatePilightLabel("Automatisch",111);
+       UpdatePilightLabel("Handmatig",111);
        targetHumidity = 0;
     } 
   }
@@ -174,7 +173,6 @@ void updateCurrentMode()
 
 void handle_lowSpeed() { 
   currentState="Laag";
-  TimerIsActive = false;
   UpdatePilightLabel(currentState,112);
   sendLowSpeed();
   rf.initReceive(); 
@@ -183,7 +181,6 @@ void handle_lowSpeed() {
 void handle_mediumSpeed() { 
   currentState="Medium";
   UpdatePilightLabel(currentState,112);
-  activateTimer();
   sendMediumSpeed();
   rf.initReceive(); 
 }
@@ -191,7 +188,6 @@ void handle_mediumSpeed() {
 void handle_highSpeed() { 
   currentState="Hoog";
   UpdatePilightLabel(currentState,112);
-  activateTimer();
   sendFullSpeed();
   rf.initReceive();
 }
@@ -443,18 +439,18 @@ void handle_buttonPressed()
   {
     if (server.arg(0) == "btnLow")
     {
-      //Serial.println("button up pressed");
       handle_lowSpeed();
+      TimerIsActive = false;
     }
     else if (server.arg(0) == "btnMedium")
     {
-      //Serial.println("button stop pressed");
       handle_mediumSpeed();
+      activateTimer();
     }
     else if (server.arg(0) == "btnFast")
     {
-      //Serial.println("button down pressed");
       handle_highSpeed();
+      activateTimer();
     }
   }
 }
@@ -554,13 +550,13 @@ void UpdatePilight(String url)
     UpdatePilight(url);
   }
 
-  void UpdatePilightLabel(String LabelTekst, int id)
+  void UpdatePilightLabel(String labelTekst, int id)
   {
-    String l = "/send?protocol=generic_label&label=";
-    l += LabelTekst;
-    l += "&color=black&id=";
-    l += id;
-    UpdatePilight(l);
+    String url = "/send?protocol=generic_label&label=";
+    url += labelTekst;
+    url += "&color=black&id=";
+    url += id;
+    UpdatePilight(url);
   }
   
 
