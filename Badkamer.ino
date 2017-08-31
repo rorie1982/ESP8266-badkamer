@@ -17,7 +17,7 @@ DHT dht(DHTPIN, DHTTYPE);
 
 String currentState = "Laag";
 String currentHostName = "ESP-Badkamer-01";
-String currentVersion = "1.0.5";
+String currentVersion = "1.0.6";
 String currentIpAdres = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
 String pilightIpAdres = "192.168.1.108";
 boolean currentInAutomaticMode = false;
@@ -67,8 +67,6 @@ void setup() {
 
   //Synq with external system pilight.
   sendLowSpeed();
-  UpdatePilightLabel("Handmatig",111);
-  UpdatePilightLabel("Laag",112);
   
 }
 
@@ -85,7 +83,6 @@ void loop() {
   if (millis() - dht_lastInterval > 30000)
   {
     readTemperatureAndHumidity();
-    UpdatePiligtTemperatureAndHumidity(currentTemperature,currentHumidity,110);
     dht_lastInterval = millis();
 
     delta = currentHumidity - min(firstMeasurementMoment, secondMeasurementMoment);
@@ -99,14 +96,12 @@ void loop() {
     {
        handle_highSpeed();
        currentInAutomaticMode = true;
-       UpdatePilightLabel("Automatisch",111);
        targetHumidity = storedTargetHumidity;
     }
     else if (currentInAutomaticMode && currentHumidity <= targetHumidity)
     {
        handle_lowSpeed();
        currentInAutomaticMode = false;
-       UpdatePilightLabel("Handmatig",111);
        targetHumidity = 0;
     } 
   }
@@ -149,23 +144,19 @@ void updateCurrentMode()
       break; 
     case IthoLow: 
       currentState = "Laag:" + remoteName;
-      TimerIsActive = false;
-      UpdatePilightLabel(currentState,112);  
+      TimerIsActive = false; 
       break; 
     case IthoMedium: 
       currentState = "Medium:" + remoteName;
-      UpdatePilightLabel(currentState,112); 
       activateTimer();
       break; 
     case IthoFull: 
       currentState = "Hoog:" + remoteName;
-      UpdatePilightLabel(currentState,112); 
       activateTimer();
       break; 
     case IthoTimer1: 
       currentState = "Timer 10 minuten:" + remoteName;
       TimerIsActive = false;
-      UpdatePilightLabel(currentState,112);
       break; 
     }
   }
@@ -173,21 +164,18 @@ void updateCurrentMode()
 
 void handle_lowSpeed() { 
   currentState="Laag";
-  UpdatePilightLabel(currentState,112);
   sendLowSpeed();
   rf.initReceive(); 
 }
 
 void handle_mediumSpeed() { 
   currentState="Medium";
-  UpdatePilightLabel(currentState,112);
   sendMediumSpeed();
   rf.initReceive(); 
 }
 
 void handle_highSpeed() { 
   currentState="Hoog";
-  UpdatePilightLabel(currentState,112);
   sendFullSpeed();
   rf.initReceive();
 }
@@ -195,7 +183,6 @@ void handle_highSpeed() {
 void handle_timer() { 
   currentState="Timer 10 minuten";
   TimerIsActive = false;
-  UpdatePilightLabel(currentState,112);
   sendTimer();
   rf.initReceive(); 
 }
@@ -470,8 +457,8 @@ void readTemperatureAndHumidity()
 
 void ConnectToWifi()
 {
-  char ssid[] = "";
-  char pass[] = "";
+  char ssid[] = "Rorie";
+  char pass[] = "BIAW7W9H7Y8D";
   int i = 0;
 
   IPAddress gateway(192, 168, 1, 1); 
@@ -480,17 +467,11 @@ void ConnectToWifi()
   
   WiFi.hostname(currentHostName);
   WiFi.begin(ssid, pass);
-  
-  if (WiFi.status() != WL_CONNECTED && i >= 30)
-  {
-    WiFi.disconnect();
-    delay(1000);
+  WiFi.mode(WIFI_STA);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
   }
-  else
-  {
-    delay(5000);
-    ip = WiFi.localIP();
-  }  
 }
 
 void activateTimer()
@@ -521,42 +502,5 @@ void sendFullSpeed() {
 void sendTimer() {
    rf.sendCommand(IthoTimer1);
 }
-
-void UpdatePilight(String url)
-  {    
-    const char* host = "192.168.1.108";
-    // Use WiFiClient class to create TCP connections
-    WiFiClient client;
-    const int httpPort = 5001;
-    
-    if (client.connect(host, httpPort)) {
-      // This will send the request to the server
-      client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-                 "Host: " + host + "\r\n" + 
-                 "Connection: close\r\n\r\n");
-            
-    }
-  }
-
-  void UpdatePiligtTemperatureAndHumidity(float temperature,float humidity, int id)
-  {
-    String url = "/send?protocol=generic_weather&temperature=";
-    url += temperature;
-    url += "&humidity=";
-    url += humidity;
-    url += "&id=";
-    url += id;
-    
-    UpdatePilight(url);
-  }
-
-  void UpdatePilightLabel(String labelTekst, int id)
-  {
-    String url = "/send?protocol=generic_label&label=";
-    url += labelTekst;
-    url += "&color=black&id=";
-    url += id;
-    UpdatePilight(url);
-  }
   
 
