@@ -5,6 +5,7 @@
 #include "IthoPacket.h"
 #include <DHT.h>
 #define min(X, Y) (((X)<(Y))?(X):(Y))
+#include <ESP8266HTTPUpdateServer.h>
 
 #define DHTPIN D4     // what pin we're connected to
 #define DHTTYPE DHT22   // DHT 22  (AM2302)
@@ -12,12 +13,13 @@
 IthoCC1101 rf;
 IthoPacket packet;
 IPAddress ip(192, 168, 1, 107);
-ESP8266WebServer server(80);
+ESP8266WebServer httpServer(80);
 DHT dht(DHTPIN, DHTTYPE);
+ESP8266HTTPUpdateServer httpUpdater;
 
 String currentState = "Laag";
 String currentHostName = "ESP-Badkamer-01";
-String currentVersion = "1.0.6";
+String currentVersion = "1.0.7";
 String currentIpAdres = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
 String pilightIpAdres = "192.168.1.108";
 boolean currentInAutomaticMode = false;
@@ -34,7 +36,10 @@ long dht_lastInterval  = 0;
 int itho_counter =0;
 
 void setup() {
-
+  
+  const char* username = "Rorie";
+  const char* password = "j10HIaueQBKM";
+  
   //Initialization dht22 temperature and humidity sensor.
   dht.begin(); 
 
@@ -55,15 +60,16 @@ void setup() {
   ConnectToWifi();
 
   //Set end points of the webserver
-  server.on("/", handlePage);
-  server.on("/xml",handle_xml);
-  server.on("/action",handle_buttonPressed);
+  httpServer.on("/", handlePage);
+  httpServer.on("/xml",handle_xml);
+  httpServer.on("/action",handle_buttonPressed);
 
   //Set the CC1101 module in receive mode for the first time, this needs to be done everytime the send data was called.
   rf.initReceive();
 
   //Start webserver  
-  server.begin(); 
+  httpUpdater.setup(&httpServer, username, password);
+  httpServer.begin(); 
 
   //Synq with external system pilight.
   sendLowSpeed();
@@ -83,8 +89,7 @@ void loop() {
   if (millis() - dht_lastInterval > 30000)
   {
     readTemperatureAndHumidity();
-    dht_lastInterval = millis();
-
+    
     delta = currentHumidity - min(firstMeasurementMoment, secondMeasurementMoment);
     
     storedTargetHumidity = min(secondMeasurementMoment, firstMeasurementMoment) + 3;
@@ -96,6 +101,7 @@ void loop() {
     {
        handle_highSpeed();
        currentInAutomaticMode = true;
+       TimerIsActive = false;
        targetHumidity = storedTargetHumidity;
     }
     else if (currentInAutomaticMode && currentHumidity <= targetHumidity)
@@ -104,6 +110,7 @@ void loop() {
        currentInAutomaticMode = false;
        targetHumidity = 0;
     } 
+    dht_lastInterval = millis();
   }
 
   //If the timer is active and the system is not in automatic mode
@@ -117,7 +124,7 @@ void loop() {
       }
   }
   
-  server.handleClient();  
+  httpServer.handleClient();  
 }
 
 void updateCurrentMode()
@@ -271,7 +278,7 @@ void handlePage()
   webPage += "</body>";
   webPage += "</html>";
 
-  server.send ( 200, "text/html", webPage);
+  httpServer.send ( 200, "text/html", webPage);
 }
 
 String GenerateFavIcon()
@@ -363,7 +370,7 @@ void handle_xml()
   returnValue += "</devices>";
   returnValue += "</Badkamer>";
   
-  server.send ( 200, "text/html", returnValue);
+  httpServer.send ( 200, "text/html", returnValue);
 }
 
 String GenerateJavaScript()
@@ -422,19 +429,19 @@ String GenerateJavaScript()
 
 void handle_buttonPressed()
 {
-  if (server.args() > 0)
+  if (httpServer.args() > 0)
   {
-    if (server.arg(0) == "btnLow")
+    if (httpServer.arg(0) == "btnLow")
     {
       handle_lowSpeed();
       TimerIsActive = false;
     }
-    else if (server.arg(0) == "btnMedium")
+    else if (httpServer.arg(0) == "btnMedium")
     {
       handle_mediumSpeed();
       activateTimer();
     }
-    else if (server.arg(0) == "btnFast")
+    else if (httpServer.arg(0) == "btnFast")
     {
       handle_highSpeed();
       activateTimer();
