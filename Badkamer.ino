@@ -19,7 +19,7 @@ ESP8266HTTPUpdateServer httpUpdater;
 
 String currentState = "Laag";
 String currentHostName = "ESP-Badkamer-01";
-String currentVersion = "1.0.7";
+String currentVersion = "1.0.8";
 String currentIpAdres = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
 String pilightIpAdres = "192.168.1.108";
 boolean currentInAutomaticMode = false;
@@ -72,7 +72,7 @@ void setup() {
   httpServer.begin(); 
 
   //Synq with external system pilight.
-  sendLowSpeed();
+  handle_lowSpeed();
   
 }
 
@@ -453,13 +453,16 @@ void readTemperatureAndHumidity()
 {
   // Reading temperature for humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (it's a very slow sensor)
-  currentHumidity = dht.readHumidity();          // Read humidity (percent)
-  currentTemperature = dht.readTemperature();     // Read temperature as Fahrenheit
+  float h = dht.readHumidity();          // Read humidity (percent)
+  float t = dht.readTemperature();     // Read temperature as Fahrenheit
   // Check if any reads failed and exit early (to try again).
-  if (isnan(currentHumidity) || isnan(currentTemperature)) 
+  if (isnan(h) || isnan(t)) 
   {
     return;
   }
+
+  currentHumidity = h;          // Read humidity (percent)
+  currentTemperature = t;     // Read temperature as Fahrenheit
 }
 
 void ConnectToWifi()
