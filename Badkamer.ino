@@ -19,7 +19,7 @@ ESP8266HTTPUpdateServer httpUpdater;
 
 String currentState = "Laag";
 String currentHostName = "ESP-Badkamer-01";
-String currentVersion = "1.0.8";
+String currentVersion = "1.0.9";
 String currentIpAdres = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
 String pilightIpAdres = "192.168.1.108";
 boolean currentInAutomaticMode = false;
@@ -129,22 +129,23 @@ void loop() {
 
 void updateCurrentMode()
 {
-  //65-9a-66-95-a5-a9-9a-56 wc
-  //66-6a-66-69-a5-69-9a-56 badkamer
-  IthoPacket packet;
-  packet = rf.getLastPacket();
-  String remoteId = rf.getLastIDstr(); 
+  String idOfWCRemote = "65-9a-66-95-a5-a9-9a-56";
+  String idOfBadkamerRemote = "66-6a-66-69-a5-69-9a-56";
+  String lastPressedRemoteId = rf.getLastIDstr(); 
   String remoteName;
 
-  if (remoteId == "65-9a-66-95-a5-a9-9a-56")
+  IthoPacket packet;
+  packet = rf.getLastPacket();
+
+  if (lastPressedRemoteId == idOfWCRemote)
   {
     remoteName = "(WC)";
   }
-  else if(remoteId == "66-6a-66-69-a5-69-9a-56")
+  else if(lastPressedRemoteId == idOfBadkamerRemote)
   {
     remoteName = "(Badkamer)";
   }
-  if (remoteId == "65-9a-66-95-a5-a9-9a-56" || remoteId == "66-6a-66-69-a5-69-9a-56")
+  if (lastPressedRemoteId == idOfWCRemote || lastPressedRemoteId == idOfBadkamerRemote)
   {
     switch (packet.command) { 
     case IthoUnknown: 
@@ -152,6 +153,7 @@ void updateCurrentMode()
     case IthoLow: 
       currentState = "Laag:" + remoteName;
       TimerIsActive = false; 
+      currentInAutomaticMode = false;
       break; 
     case IthoMedium: 
       currentState = "Medium:" + remoteName;
@@ -172,17 +174,20 @@ void updateCurrentMode()
 void handle_lowSpeed() { 
   currentState="Laag";
   sendLowSpeed();
+  sendLowSpeed();
   rf.initReceive(); 
 }
 
 void handle_mediumSpeed() { 
   currentState="Medium";
   sendMediumSpeed();
+  sendMediumSpeed();
   rf.initReceive(); 
 }
 
 void handle_highSpeed() { 
   currentState="Hoog";
+  sendFullSpeed();
   sendFullSpeed();
   rf.initReceive();
 }
@@ -435,6 +440,7 @@ void handle_buttonPressed()
     {
       handle_lowSpeed();
       TimerIsActive = false;
+      currentInAutomaticMode = false;
     }
     else if (httpServer.arg(0) == "btnMedium")
     {
