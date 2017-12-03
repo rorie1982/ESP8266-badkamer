@@ -154,6 +154,7 @@ void updateCurrentMode()
       currentState = "Laag:" + remoteName;
       TimerIsActive = false; 
       currentInAutomaticMode = false;
+      targetHumidity = 0;
       break; 
     case IthoMedium: 
       currentState = "Medium:" + remoteName;
@@ -441,6 +442,7 @@ void handle_buttonPressed()
       handle_lowSpeed();
       TimerIsActive = false;
       currentInAutomaticMode = false;
+      targetHumidity = 0;
     }
     else if (httpServer.arg(0) == "btnMedium")
     {
